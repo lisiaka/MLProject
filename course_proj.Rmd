@@ -98,7 +98,7 @@ If result is not good, we can try to replace some of the variables with oter var
         library(caret)
 ts1<-training_ds
 set.seed(12345)
-inTraining<-createDataPartition(training_ds$classe, p=0.25,list=FALSE )
+inTraining<-createDataPartition(training_ds$classe, p=0.7,list=FALSE )
 
 #selecting first 3 features (roll, pitch and yaw) for each device
 ts_arm<-ts1[,names(ts1)[grep('_arm',names(ts1))]][,1:3]
@@ -140,7 +140,8 @@ ts_final_for_test<-data.frame(ts2$problem_id,ts_new_test)
 ```
 
 ##Method
-Next step - selecting a machine learning method. Since the variable classe is a factor variable - we are limited by methods such as 
+Next step - selecting a machine learning method. Since the variable classe is a factor variable - we can consider methods such as 
+
 * decision tree  (rpart)
 * random forest (rm)
 * neural networks - outside the scope of this course.
@@ -165,7 +166,7 @@ confMatr<-confusionMatrix(prediction,ds_val$ts1.classe)
 confMatr$table
 ```
 
-The overall accuracy of the current model is `r round(mean(data.frame(confMatr$byClass)$Balanced.Accuracy)*100,2)`%.
+The overall accuracy of the current model is `r sum(prediction==ds_val$ts1.classe)/length(prediction)`%.
 
 We will now attempt to improve accuracy by training the model with replaced feature.
 ```{r training the model with mx}
@@ -176,10 +177,17 @@ prediction_mx<-predict(modelFitRF_mx,ds_val_mx)
 confMatr_mx<-confusionMatrix(prediction_mx,ds_val_mx$ts1.classe)
 confMatr_mx$table
 ```
-The accuracy of this model is `r round(mean(data.frame(confMatr_mx$byClass)$Balanced.Accuracy)*100,2)`%.
+The accuracy of this model is `r sum(prediction_mx==ds_val_mx$ts1.classe)/length(prediction)`%.
 
 As we see, accuracy of the model went down, not up, so swapping the variable did not improve accuracy.
 We can go on replacing variables but the variables I tried did not result in better accuracy then the first suggested set.
+
+```{r out of sample error}
+
+accuracy<-sum(prediction==ds_val$ts1.classe)/length(prediction)
+OoSE<-round(1-accuracy,4)*100
+```
+The out of sample error is `r OoSE`%.
 
 Finally we can rank the variables from the final model by important to see which variable contributes the most:
 ```{r variable importance}
@@ -193,6 +201,11 @@ The random forest machine learning method was applied to train the model to dist
 The variable importance analysis suggests that belt related measurements play the most important role in identifying mistakes during training which leads us to conclusion that the motion of hips affects the quality of the workout most (it is likely the specific motion in hips leads to different mistakes).
 
 
+## Predicting values for test
 
-
+The final step - predicting 20 test values.
+```{r test}
+prediction_test<-predict(modelFitRF,ts_final_for_test)
+prediction_test
+```
 
