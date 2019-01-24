@@ -1,0 +1,198 @@
+---
+title: "ML_course_project"
+author: "Maria Palmer"
+date: "1/7/2019"
+output: html_document
+---
+##Background
+
+This project's objective is to reproduce results of the research by Eduardo Velloso, Andreas Bulling, Hans Gellersen, Wallace Ugulino and Hugo Fuks on "Qualitative Activity Recognition of Weight Lifting Exercises". 
+The goal is to predict in which manner subjects did the excersise while wearing various wearable devices with sensors in order to detect specific mistakes in training.  
+
+Participants performed 10 repetitions of the Unilateral Dumbbell Biceps Curl in five distinctive ways: 
+
+* according to the specification (Class A) 
+* throwing the elbows to the front (Class B) 
+* lifting the dumbbell only halfway (Class C) 
+* lowering the dumbbell only halfway (Class D) 
+* throwing the hips to the front (Class E)
+
+The data were collected from wearable devices:
+
+* belt
+* bumbbell
+* arm-band
+* glove
+
+In total more than 19 thousands observations were made, data on 160 variables collected. Out of these variables a few relevant features must be selected to predict variable class. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+currentwd<-getwd()
+setwd("/Users/maria/Documents/Coursera-R/2018/git/ML")
+```
+
+### Data 
+
+Test and training datasets are provided in separate datafiles. We are loading them in different dataframes.
+
+```{r loading data files}
+trainingfile<-"pml-training.csv"
+testfile<-"pml-testing.csv"
+if(!file.exists(trainingfile)){
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",trainingfile,method="curl")
+}
+if(!file.exists(testfile)){
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",testfile,method="curl")
+}
+training_ds<-read.csv(trainingfile)
+test_ds<-read.csv(testfile)
+```
+
+Next we have to select features that can be used for training the model.
+Ideally we can find a set of features not correlated with each other, but correlated with the outcome.
+
+##Exploratory data analysis
+We start by exploring the dataset and removing features that contain majority of empty values since these would be difficult to use. 
+Then we can also take means of the values and plot them by Classe to see if some of them are obviously discriminating between classes.
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+mean_c_A<-sapply(training_ds[training_ds$classe=="A",],mean)[!is.na(sapply(training_ds,mean))]
+mean_c_B<-sapply(training_ds[training_ds$classe=="B",],mean)[!is.na(sapply(training_ds,mean))]
+mean_c_C<-sapply(training_ds[training_ds$classe=="C",],mean)[!is.na(sapply(training_ds,mean))]
+mean_c_D<-sapply(training_ds[training_ds$classe=="D",],mean)[!is.na(sapply(training_ds,mean))]
+mean_c_E<-sapply(training_ds[training_ds$classe=="E",],mean)[!is.na(sapply(training_ds,mean))]
+
+sd_c_A<-sapply(training_ds[training_ds$classe=="A",],sd)[!is.na(sapply(training_ds,mean))]
+sd_c_B<-sapply(training_ds[training_ds$classe=="B",],sd)[!is.na(sapply(training_ds,mean))]
+sd_c_C<-sapply(training_ds[training_ds$classe=="C",],sd)[!is.na(sapply(training_ds,mean))]
+sd_c_D<-sapply(training_ds[training_ds$classe=="D",],sd)[!is.na(sapply(training_ds,mean))]
+sd_c_E<-sapply(training_ds[training_ds$classe=="E",],sd)[!is.na(sapply(training_ds,mean))]
+
+means<-data.frame(mean_c_A,mean_c_B,mean_c_C,mean_c_D,mean_c_E,sd_c_A,sd_c_B,sd_c_C,sd_c_D,sd_c_E)
+means$var<-row.names(means)
+means$type<-unlist(lapply(strsplit(means$var,'_'),function(x){x[1]}))
+means$axis<-unlist(lapply(strsplit(means$var,'_'),function(x){x[3]}))
+means$device<-unlist(lapply(strsplit(means$var,'_'),function(x){x[2]}))
+
+p<-ggplot(means[means$device %in% c("arm","belt","forearm","dumbbell")&means$type %in% c("accel","magnet"),], aes(x=axis))+geom_point(aes(y=mean_c_A,colour="A",size=sd_c_A,alpha=.02))+geom_point(aes(y=mean_c_B,colour="B",size=sd_c_B,alpha=.02))+geom_point(aes(y=mean_c_C,colour="C",size=sd_c_C,alpha=.02))+geom_point(aes(y=mean_c_D,colour="D",size=sd_c_D,alpha=.02))+geom_point(aes(y=mean_c_E,colour="E",size=sd_c_E,alpha=.02))+facet_grid(type ~device)
+ 
+p
+
+p<-ggplot(means[means$device %in% c("arm","belt","forearm","dumbbell")&means$type %in% c("gyros"),], aes(x=axis))+geom_point(aes(y=mean_c_A,colour="A",size=sd_c_A,alpha=.02))+geom_point(aes(y=mean_c_B,colour="B",size=sd_c_B,alpha=.02))+geom_point(aes(y=mean_c_C,colour="C",size=sd_c_C,alpha=.02))+geom_point(aes(y=mean_c_D,colour="D",size=sd_c_D,alpha=.02))+geom_point(aes(y=mean_c_E,colour="E",size=sd_c_E,alpha=.02))+facet_grid(type ~device)
+ 
+p
+
+ p2<-ggplot(means[means$device %in% c("arm","belt","forearm","dumbbell")&means$type %in% c("roll","pitch","yaw"),], aes(x=type))+geom_point(aes(y=mean_c_A,colour="A",size=sd_c_A,alpha=.02))+geom_point(aes(y=mean_c_B,colour="B",size=2*sd_c_B,alpha=.02))+geom_point(aes(y=mean_c_C,colour="C",size=2*sd_c_C,alpha=.02))+geom_point(aes(y=mean_c_D,colour="D",size=2*sd_c_D,alpha=.02))+geom_point(aes(y=mean_c_E,colour="E",size=2*sd_c_E,alpha=.02))+facet_grid(device~.)
+ p2
+
+
+```
+
+These plots altough give some understading about the data, don't seem to provide very useful insights about most discriminatory variables. The position of the bubble represents the mean of the variable for particular class (distinguished by colour). The size of the bubble reflects standard deviation, although it only categorizes it, if radius of the bubble was equal to standard deviation bubbles would have to be much larger and overlap.
+Even when sample means for different classes are seemingly removed from each other it is not possible to exclude the randomness as a reason for this when we take into account standard deviation.
+That is why we have to assume that a combination of measurements from all four used devices can be predictive of the class. We anyway should avoid using variables which correlate with each other. One strategy can be to get the roll, pitch and yaw for each of them since other measurements are likely to be correlated with these three.
+If result is not good, we can try to replace some of the variables with oter variables to see if we can gain more accuracy.
+
+```{r feature selection}
+        library(caret)
+ts1<-training_ds
+set.seed(12345)
+inTraining<-createDataPartition(training_ds$classe, p=0.25,list=FALSE )
+
+#selecting first 3 features (roll, pitch and yaw) for each device
+ts_arm<-ts1[,names(ts1)[grep('_arm',names(ts1))]][,1:3]
+ts_forarm<-ts1[,names(ts1)[grep('forearm',names(ts1))]][,1:3]
+ts_belt<-ts1[,names(ts1)[grep('belt',names(ts1))]][,1:3]
+ts_dumbbel<-ts1[,names(ts1)[grep('dumbbell',names(ts1))]][,1:3]
+ts_new<-data.frame(ts_arm,ts_forarm,ts_belt,ts_dumbbel)
+ts_final_for_training<-data.frame(ts1$classe,ts_new)
+
+ds_train<-ts_final_for_training[inTraining,]
+ds_val<-ts_final_for_training[-inTraining,]
+```
+
+One of the later strategies to tune the model can be to replace some variables with others. To decide which one to replace with which, we can use the correlation matrix and choose the variable that is more correlated with others and replace it with variable which correlates with others less. Then we can see if this will add accuracy to the model.
+
+```{r replacing features}
+#building correlation matrix
+cor(data.frame(ts1$roll_arm,ts1$pitch_arm,ts1$yaw_arm,ts1$gyros_arm_x,ts1$gyros_arm_y,ts1$gyros_arm_z))
+#replacing  yaw_arm with gyros_arm_x
+ts_arm_mx<-ts1[,names(ts1)[grep('gyros_arm_x',names(ts1))]]
+ts_final_for_training_mx<-data.frame(ts_final_for_training[,-4],ts_arm_mx)
+
+ds_train_mx<-ts_final_for_training_mx[inTraining,]
+ds_val_mx<-ts_final_for_training_mx[-inTraining,]
+
+```
+
+The test dataset must be transformed in the same way as the training dataset was.
+
+```{r transformation of the test dataset, echo=FALSE}
+ts2<-test_ds
+ts_arm_test<-ts2[,names(ts2)[grep('_arm',names(ts2))]][,1:3]
+ts_forarm_test<-ts2[,names(ts2)[grep('forearm',names(ts2))]][,1:3]
+ts_belt_test<-ts2[,names(ts2)[grep('belt',names(ts2))]][,1:3]
+ts_dumbbel_test<-ts2[,names(ts2)[grep('dumbbell',names(ts2))]][,1:3]
+ts_new_test<-data.frame(ts_arm_test,ts_forarm_test,ts_belt_test,ts_dumbbel_test)
+ts_final_for_test<-data.frame(ts2$problem_id,ts_new_test)
+#head(ts_final_for_test)
+```
+
+##Method
+Next step - selecting a machine learning method. Since the variable classe is a factor variable - we are limited by methods such as 
+* decision tree  (rpart)
+* random forest (rm)
+* neural networks - outside the scope of this course.
+
+Without obviously discriminating variables it is more likely to get a better accuracy by using random forests. This is the method we are going to use.
+
+```{r training the model}
+
+modelFitRF<-train(ts1.classe~.,data=ds_train,method='rf')
+modelFitRF
+
+```
+
+To measure accuracy we will build a confusion matrix to see how the model will perform on the validation data.
+
+```{r testing the model}
+
+prediction<-predict(modelFitRF,ds_val)
+
+confMatr<-confusionMatrix(prediction,ds_val$ts1.classe)
+
+confMatr$table
+```
+
+The overall accuracy of the current model is `r round(mean(data.frame(confMatr$byClass)$Balanced.Accuracy)*100,2)`%.
+
+We will now attempt to improve accuracy by training the model with replaced feature.
+```{r training the model with mx}
+
+modelFitRF_mx<-train(ts1.classe~.,data=ds_train_mx,method='rf')
+modelFitRF_mx
+prediction_mx<-predict(modelFitRF_mx,ds_val_mx)
+confMatr_mx<-confusionMatrix(prediction_mx,ds_val_mx$ts1.classe)
+confMatr_mx$table
+```
+The accuracy of this model is `r round(mean(data.frame(confMatr_mx$byClass)$Balanced.Accuracy)*100,2)`%.
+
+As we see, accuracy of the model went down, not up, so swapping the variable did not improve accuracy.
+We can go on replacing variables but the variables I tried did not result in better accuracy then the first suggested set.
+
+Finally we can rank the variables from the final model by important to see which variable contributes the most:
+```{r variable importance}
+varImp (modelFitRF, scale = FALSE)
+```
+
+
+#Results
+
+The random forest machine learning method was applied to train the model to distinguish between types of mistakes during training and the accuracy of `r round(mean(data.frame(confMatr$byClass)$Balanced.Accuracy)*100,2)`%. 
+The variable importance analysis suggests that belt related measurements play the most important role in identifying mistakes during training which leads us to conclusion that the motion of hips affects the quality of the workout most (it is likely the specific motion in hips leads to different mistakes).
+
+
+
+
+
